@@ -125,20 +125,38 @@ jobs:
           chmod +x RR_workdir/*.sh
           cd RR_workdir && bash ./create-pal.sh
 
+      - name: "📦 Prepare for Upload and Release"
+        if: steps.check_update.outputs.changed == 'true'
+        id: prepare
+        run: |
+          VERSION=$(cat RR_workdir/RetroRewind6/version.txt | tr -d "[:space:]")
+          TAG="v${VERSION}"
+          
+          ORIGINAL_ISO=$(find RR_workdir/new-image -type f -name "*.iso")
+          NEW_ISO_PATH="RR_workdir/new-image/RR_${TAG}.iso"
+          
+          echo "Renaming '$ORIGINAL_ISO' to '$NEW_ISO_PATH'"
+          mv "$ORIGINAL_ISO" "$NEW_ISO_PATH"
+          
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "local_path=${NEW_ISO_PATH}" >> $GITHUB_OUTPUT
+          echo "remote_path=/RetroRewind-Builds/RR_latest.iso" >> $GITHUB_OUTPUT
+
+      - name: "☁️ Upload ISO to Dropbox"
+        if: steps.check_update.outputs.changed == 'true'
+        uses: Lewuathe/dropbox-github-action@v1.0.3
+        with:
+          dropbox-app-key: ${{ secrets.DROPBOX_APP_KEY }}
+          dropbox-app-secret: ${{ secrets.DROPBOX_APP_SECRET }}
+          dropbox-refresh-token: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
+          source-path: ${{ steps.prepare.outputs.local_path }}
+          target-path: ${{ steps.prepare.outputs.remote_path }}
+          write-mode: overwrite
+
       - name: "🚀 Create GitHub Release"
         if: steps.check_update.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.prepare.outputs.tag }}
         run: |
-          VERSION=$(cat RR_workdir/RetroRewind6/version.txt | tr -d "[:space:]")
-          TAG="v${VERSION}"
-          echo "Version: ${VERSION}"
-          echo "Tag: ${TAG}"
-          
-          ORIGINAL_ISO=$(find RR_workdir/new-image -type f -name "*.iso")
-          NEW_ISO_NAME="RR_workdir/new-image/RR_${TAG}.iso"
-          
-          echo "Renaming '$ORIGINAL_ISO' to '$NEW_ISO_NAME'"
-          mv "$ORIGINAL_ISO" "$NEW_ISO_NAME"
-          
-          gh release create "$TAG" --title "🏎️ ISO Release $TAG" --notes "Automated build for RetroRewind version $VERSION." "$NEW_ISO_NAME"
+          gh release create "$TAG" --title "🏎️ RetroRewind ISO $TAG" --notes "[⬇️ Download latest build](https://api.heyfordy.de/dl?rr_iso)"

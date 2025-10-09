@@ -24,6 +24,6 @@ mkdir -p /workdir.tmp/files/Binaries
 mkdir -p /workdir.tmp/files/Experts
 . ./copy-files.sh
 
-wit copy workdir.tmp -T0 --DEST new-image/%X  -ovv --links \
+wit copy workdir.tmp -T0 --DEST new-image/RMCP88.iso  -ovv --links \
 	--id "$DEST_ID" --name "$DEST_NAME" --$IMAGE_TYPE
 

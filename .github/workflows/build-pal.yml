@@ -2,7 +2,7 @@ name: "» 🌀 Build RetroRewind ISO 🇪🇺"
 
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * *' # run daily at 2 AM UTC
   workflow_dispatch:
 
 jobs:
@@ -134,4 +134,11 @@ jobs:
           TAG="v${VERSION}"
           echo "Version: ${VERSION}"
           echo "Tag: ${TAG}"
-          gh release create "$TAG" --title "🏎️ ISO Release $TAG" --notes "Automated build for RetroRewind version $VERSION." "RR_workdir/new-image/"*
+          
+          ORIGINAL_ISO=$(find RR_workdir/new-image -type f -name "*.iso")
+          NEW_ISO_NAME="RR_workdir/new-image/RR_${TAG}.iso"
+          
+          echo "Renaming '$ORIGINAL_ISO' to '$NEW_ISO_NAME'"
+          mv "$ORIGINAL_ISO" "$NEW_ISO_NAME"
+          
+          gh release create "$TAG" --title "🏎️ ISO Release $TAG" --notes "Automated build for RetroRewind version $VERSION." "$NEW_ISO_NAME"

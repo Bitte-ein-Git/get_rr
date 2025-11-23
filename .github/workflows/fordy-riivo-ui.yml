@@ -1,0 +1,65 @@
+name: 🎨 Fordy-RR (Alt.) Riivolution Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release Tag'
+        required: true
+        default: 'alt-v1.0.0'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          ref: Riivolution
+
+      - name: 🔍 Get Upstream Version
+        id: version
+        run: |
+          REMOTE_VERSION=$(curl -s https://api.heyfordy.de/rr_app/version-rr | jq -r '.version')
+          echo "Detected Base Version: $REMOTE_VERSION"
+          echo "ver=$REMOTE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: 🛠️ Setup Environment
+        run: |
+          # System Tools & Python Libs
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wget unzip zip perl python3-pip git
+          pip3 install json5 --break-system-packages
+
+          # Clone wuj5 Repo to get all modules (bmg.py, etc.)
+          git clone https://github.com/stblr/wuj5.git wszst/wuj5_src
+          
+          # Permissions
+          chmod +x wszst/wszst
+          chmod +x wszst/wbmgt
+          chmod +x builder/fordy-riivo-ui.sh
+          
+          # Add wszst to PATH
+          echo "${{ github.workspace }}/wszst" >> $GITHUB_PATH
+
+      - name: 🎨 Run UI Patcher Script
+        id: build
+        run: |
+          ./builder/fordy-riivo-ui.sh "${{ steps.version.outputs.ver }}" "${{ inputs.release_tag }}"
+
+      - name: 🚀 Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          target_commitish: Riivolution
+          name: 🎨 Fordy-RR (Alt.) (${{ inputs.release_tag }})
+          files: ${{ steps.build.outputs.artifact_path }}
+          body: |
+            **Custom UI Build** based on Retro Rewind ${{ steps.version.outputs.ver }}
+            
+            **Changes:**
+            - 🟧 Buttons & Text -> Orange
+            - 🟥 Player Names -> Red (Experimental)
+            - 📝 Daisy -> Steve / Mach-Bike -> KFC-Mofa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

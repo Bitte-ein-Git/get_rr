@@ -2,7 +2,6 @@ name: 🗿 Fordy-RR Riivolution Builder
 
 on:
   schedule:
-    # Run every hour
     - cron: '0 * * * *'
   workflow_dispatch:
 
@@ -20,13 +19,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch remote version from API
-          REMOTE_VERSION=$(curl -s https://api.heyfordy.de/rr_app/version-rr | jq -r '.version')
+          # Fetch latest version from text file
+          REMOTE_VERSION=$(curl -s http://update.rwfc.net:8000/RetroRewind/RetroRewindVersion.txt | tail -n 1 | awk '{print $1}')
           TAG_NAME="RR-riivo_${REMOTE_VERSION}"
           
-          echo "Detected API Version: $REMOTE_VERSION"
+          echo "Detected RR Version: $REMOTE_VERSION"
           
-          # Check if release already exists
           if gh release view "$TAG_NAME" > /dev/null 2>&1; then
             echo "Release $TAG_NAME exists. Skipping."
             echo "run_build=false" >> $GITHUB_OUTPUT
@@ -40,24 +38,23 @@ jobs:
       - name: 🛠️ Setup Tools & Env
         if: steps.check.outputs.run_build == 'true'
         run: |
-          # Install dependencies
           sudo apt-get update -qq
-          sudo apt-get install -y -qq wget unzip zip perl
+          sudo apt-get install -y -qq wget unzip zip perl libarchive-tools
           
           # Make tools executable
           chmod +x wszst/wszst
           chmod +x wszst/wbmgt
-          chmod +x builder/fordy-riivo.sh
+          chmod +x builder/build-updates.sh
 
-          # Add wszst directory to system PATH
+          # Add wszst to PATH
           echo "${{ github.workspace }}/wszst" >> $GITHUB_PATH
 
       - name: 🏗️ Run Build Script
         if: steps.check.outputs.run_build == 'true'
         id: build
         run: |
-          # Execute build script
-          ./builder/fordy-riivo.sh "${{ steps.check.outputs.version }}"
+          # Execute new update build script
+          ./builder/build-updates.sh "${{ steps.check.outputs.version }}" "${{ github.workspace }}"
 
       - name: 🚀 Create Release
         if: steps.check.outputs.run_build == 'true'
@@ -65,14 +62,21 @@ jobs:
         with:
           tag_name: ${{ steps.check.outputs.tag_name }}
           name: 🗿 Fordy-RR • Riivolution (${{ steps.check.outputs.version }})
-          files: ${{ steps.build.outputs.artifact_path }}
+          files: |
+            Fordy-RR-*.zip
+            UPDATE-Fordy-RR-*.zip
           target_commitish: Riivolution
           body: |
             🗿 **Auto-Generated Build**
             
             Based on upstream version: `${{ steps.check.outputs.version }}`
             
-            **Modified 'GER' lang text (for MyStuff):**
+            **Includes:**
+            - `Fordy-RR-${{ steps.check.outputs.version }}.zip`: Complete Package
+            - `Fordy-RR-${{ steps.check.outputs.version }}-PATCH_ONLY.zip`: Only modified files (Text, XML, MyStuff)
+            - `UPDATE-Fordy-RR-*.zip`: All patches for this version series
+            
+            **Modified 'GER' lang text (via MyStuff):**
             - 🏍️ Mach-Bike -> KFC-Mofa
             - 👤 Daisy -> Steve
 

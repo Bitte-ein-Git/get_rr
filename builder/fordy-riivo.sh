@@ -4,6 +4,7 @@
 set -e
 
 VERSION="$1"
+BASE_URL="http://update.rwfc.net:8000/RetroRewind/zip"
 
 # Validate version argument
 if [ -z "$VERSION" ]; then
@@ -17,69 +18,121 @@ if ! command -v wszst &> /dev/null || ! command -v wbmgt &> /dev/null; then
     exit 1
 fi
 
-echo "Starting build for version: $VERSION"
+echo "🚀 Starting build for version: $VERSION"
 
-# Prepare clean workspace
+# Setup workspace
 rm -rf workdir
 mkdir -p workdir
 
-# Download RetroRewind release
-echo "Downloading RetroRewind..."
-wget -q http://update.rwfc.net:8000/RetroRewind/zip/RetroRewind.zip -O workdir/RetroRewind.zip
+# Function to apply patches to a specific directory
+# Arguments: $1 = Path to RetroRewind6 folder
+apply_patches() {
+    local target_base="$1/Language/GER"
+    
+    # Check if GER folder exists (updates might not have it)
+    if [ ! -d "$target_base" ]; then
+        echo "   ⚠️ No GER language folder found in this zip. Skipping patches."
+        return 0
+    fi
 
-# Extract archive
-echo "Unzipping archive..."
-unzip -q workdir/RetroRewind.zip -d workdir/content
+    # Process all SZS files
+    find "$target_base" -name "*.szs" | while read szs_file; do
+        # Extract SZS contents
+        wszst extract "$szs_file" --dest "workdir/temp_szs" --quiet --overwrite
+        
+        # Process BMG files inside SZS
+        find "workdir/temp_szs" -name "*.bmg" | while read bmg_file; do
+            # Decode BMG to text
+            wbmgt decode "$bmg_file" --dest "workdir/temp_msg.txt" --quiet --overwrite
+            
+            # Apply Replacements
+            perl -pi -e 's/\bDaisy\b/Steve/g' "workdir/temp_msg.txt"
+            perl -pi -e 's/Mach-Bike/KFC-Mofa/g' "workdir/temp_msg.txt"
+            
+            # Encode text back to BMG
+            wbmgt encode "workdir/temp_msg.txt" --dest "$bmg_file" --quiet --overwrite
+            rm "workdir/temp_msg.txt"
+        done
+        
+        # Repack SZS
+        wszst create "workdir/temp_szs" --dest "$szs_file" --overwrite --quiet
+        rm -rf "workdir/temp_szs"
+    done
+}
 
-# Define target path
-TARGET_DIR="workdir/content/RetroRewind6/Language/GER"
+# ==============================================================================
+# 1. PROCESS MASTER RELEASE (RetroRewind.zip)
+# ==============================================================================
+echo "📦 Processing MASTER Release (RetroRewind.zip)..."
+wget -q "$BASE_URL/RetroRewind.zip" -O workdir/RetroRewind.zip
+unzip -q workdir/RetroRewind.zip -d workdir/master
 
-# Verify target exists
-if [ ! -d "$TARGET_DIR" ]; then
-  echo "Error: Target directory $TARGET_DIR not found."
-  exit 1
-fi
+# Update version.txt
+echo "$VERSION" > workdir/master/RetroRewind6/version.txt
 
-# Process all SZS files
-find "$TARGET_DIR" -name "*.szs" | while read szs_file; do
-  echo "Processing: $szs_file"
-  
-  # Extract SZS contents
-  wszst extract "$szs_file" --dest "workdir/temp_szs" --quiet --overwrite
-  
-  # Process BMG files inside SZS
-  find "workdir/temp_szs" -name "*.bmg" | while read bmg_file; do
-    echo "  Patching BMG: $bmg_file"
+# Apply Patches
+echo "   Applying text patches..."
+apply_patches "workdir/master/RetroRewind6"
+
+# Create Master Zip
+cd workdir/master
+zip -r -q "../../Fordy-RR-${VERSION}.zip" .
+cd ../..
+echo "✅ Created Fordy-RR-${VERSION}.zip"
+
+# ==============================================================================
+# 2. PROCESS UPDATE LOOP (All versions in this major release)
+# ==============================================================================
+MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-2)
+MAX_PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+echo "🔄 Starting Update Loop for ${MAJOR_MINOR}.x (0 to $MAX_PATCH)..."
+
+for ((i=0; i<=MAX_PATCH; i++)); do
+    CURRENT_VER="${MAJOR_MINOR}.${i}"
+    echo "------------------------------------------------"
+    echo "Processing Update Version: $CURRENT_VER"
     
-    # Decode BMG to text
-    wbmgt decode "$bmg_file" --dest "workdir/temp_msg.txt" --quiet --overwrite
+    TARGET_ZIP_NAME="UPDATE-Fordy-RR-${CURRENT_VER}.zip"
     
-    # Replace 'Daisy' with 'Steve' (whole word only)
-    perl -pi -e 's/\bDaisy\b/Steve/g' "workdir/temp_msg.txt"
+    # Download Logic with Fallback for x.x.0
+    DL_SUCCESS=false
     
-    # Replace 'Mach-Bike' with 'KFC-Mofa'
-    perl -pi -e 's/Mach-Bike/KFC-Mofa/g' "workdir/temp_msg.txt"
+    # Try Standard Format x.x.x.zip
+    if wget -q "$BASE_URL/${CURRENT_VER}.zip" -O "workdir/update_src.zip"; then
+        DL_SUCCESS=true
+    # Try Short Format x.x.zip (only for .0 releases)
+    elif [ "$i" -eq 0 ] && wget -q "$BASE_URL/${MAJOR_MINOR}.zip" -O "workdir/update_src.zip"; then
+        echo "   Found via fallback: ${MAJOR_MINOR}.zip"
+        DL_SUCCESS=true
+    fi
     
-    # Encode text back to BMG (Force overwrite)
-    wbmgt encode "workdir/temp_msg.txt" --dest "$bmg_file" --quiet --overwrite
+    if [ "$DL_SUCCESS" = false ]; then
+        echo "   ❌ Source zip not found on server. Skipping."
+        continue
+    fi
     
-    # Remove temp text file
-    rm "workdir/temp_msg.txt"
-  done
-  
-  # Repack SZS
-  wszst create "workdir/temp_szs" --dest "$szs_file" --overwrite --quiet
-  
-  # Cleanup temp SZS dir
-  rm -rf "workdir/temp_szs"
+    # Extract
+    rm -rf workdir/temp_update
+    mkdir -p workdir/temp_update
+    unzip -q "workdir/update_src.zip" -d "workdir/temp_update"
+    
+    # Update version.txt (Check if file exists first, hotfixes might differ)
+    if [ -f "workdir/temp_update/RetroRewind6/version.txt" ]; then
+        echo "$CURRENT_VER" > "workdir/temp_update/RetroRewind6/version.txt"
+    fi
+    
+    # Apply Patches (Best Effort)
+    echo "   Attempting to patch files..."
+    apply_patches "workdir/temp_update/RetroRewind6"
+    
+    # Create Update Zip
+    cd workdir/temp_update
+    zip -r -q "../../$TARGET_ZIP_NAME" .
+    cd ../..
+    
+    echo "✅ Created $TARGET_ZIP_NAME"
+    rm workdir/update_src.zip
 done
 
-# Create final release ZIP
-echo "Creating final ZIP..."
-cd workdir/content
-ZIP_NAME="Fordy-RR-${VERSION}.zip"
-zip -r -q "../../$ZIP_NAME" .
-cd ../..
-
-echo "Build complete: $ZIP_NAME"
-echo "artifact_path=$ZIP_NAME" >> $GITHUB_OUTPUT
+echo "🎉 All builds complete."

@@ -19,12 +19,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch latest version from text file
-          REMOTE_VERSION=$(curl -s http://update.rwfc.net:8000/RetroRewind/RetroRewindVersion.txt | tail -n 1 | awk '{print $1}')
+          # Fetch remote version from API
+          REMOTE_VERSION=$(curl -s https://api.heyfordy.de/rr_app/version-rr | jq -r '.version')
           TAG_NAME="RR-riivo_${REMOTE_VERSION}"
           
-          echo "Detected RR Version: $REMOTE_VERSION"
+          echo "Detected API Version: $REMOTE_VERSION"
           
+          # Check if release already exists
           if gh release view "$TAG_NAME" > /dev/null 2>&1; then
             echo "Release $TAG_NAME exists. Skipping."
             echo "run_build=false" >> $GITHUB_OUTPUT
@@ -38,127 +39,24 @@ jobs:
       - name: 🛠️ Setup Tools & Env
         if: steps.check.outputs.run_build == 'true'
         run: |
+          # Install dependencies
           sudo apt-get update -qq
-          sudo apt-get install -y -qq wget unzip zip
+          sudo apt-get install -y -qq wget unzip zip perl libarchive-tools
           
-          # Make scripts executable
-          chmod +x builder/*.sh
-          
-          # Ensure .mystuff exists
-          mkdir -p .mystuff
+          # Make tools executable
+          chmod +x wszst/wszst
+          chmod +x wszst/wbmgt
+          chmod +x builder/fordy-riivo.sh
 
-      - name: 🏗️ Run Build Logic
+          # Add wszst directory to system PATH
+          echo "${{ github.workspace }}/wszst" >> $GITHUB_PATH
+
+      - name: 🏗️ Run Build Script
         if: steps.check.outputs.run_build == 'true'
         id: build
-        shell: bash
         run: |
-          VERSION="${{ steps.check.outputs.version }}"
-          BASE_URL="http://update.rwfc.net:8000/RetroRewind/zip"
-          echo "🚀 Starting Build for Version $VERSION"
-
-          # ==========================================
-          # 1. BUILD MASTER RELEASE (Standard)
-          # ==========================================
-          echo "📦 Building Master Release..."
-          mkdir -p dist_master
-          
-          # Download full mod
-          wget -q "$BASE_URL/RetroRewind.zip" -O RetroRewind.zip
-          unzip -q RetroRewind.zip -d dist_master/
-          
-          # Apply Version & MyStuff
-          echo "$VERSION" > dist_master/RetroRewind6/version.txt
-          cp -r .mystuff/* dist_master/RetroRewind6/MyStuff/ || true
-          
-          # Run Text Replacements (copy-files.sh)
-          # We run inside dist_master so relative paths in script work if designed that way, 
-          # or call it from root. Assuming standard 'builder/copy-files.sh' usage.
-          cd dist_master
-          ../builder/copy-files.sh
-          cd ..
-          
-          # Create Full Zip
-          cd dist_master
-          zip -r -q "../Fordy-RR-${VERSION}.zip" .
-          cd ..
-          echo "✅ Master Zip created: Fordy-RR-${VERSION}.zip"
-
-          # ==========================================
-          # 2. UPDATE LOOP (Patches)
-          # ==========================================
-          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-2)
-          MAX_PATCH=$(echo "$VERSION" | cut -d. -f3)
-          
-          echo "🔄 Starting Update Loop (Version $MAJOR_MINOR.0 to $MAJOR_MINOR.$MAX_PATCH)..."
-
-          for ((i=0; i<=MAX_PATCH; i++)); do
-            CURRENT_VER="${MAJOR_MINOR}.${i}"
-            echo "   Processing $CURRENT_VER..."
-            
-            # Determine URL (x.x.0 often named x.x.zip)
-            if [ "$i" -eq 0 ]; then
-               URLS=("$BASE_URL/${MAJOR_MINOR}.zip" "$BASE_URL/${CURRENT_VER}.zip")
-            else
-               URLS=("$BASE_URL/${CURRENT_VER}.zip")
-            fi
-            
-            # Try download
-            DOWNLOADED=false
-            for URL in "${URLS[@]}"; do
-                if wget -q "$URL" -O temp_update.zip; then
-                    DOWNLOADED=true
-                    break
-                fi
-            done
-            
-            if [ "$DOWNLOADED" = false ]; then
-                echo "   ⚠️ Source zip for $CURRENT_VER not found. Skipping."
-                continue
-            fi
-            
-            # Prepare Update Dir
-            UPDATE_DIR="dist_update_${CURRENT_VER}"
-            mkdir -p "$UPDATE_DIR"
-            unzip -q temp_update.zip -d "$UPDATE_DIR/"
-            rm temp_update.zip
-            
-            # Update Version & Copy .mystuff
-            if [ -f "$UPDATE_DIR/RetroRewind6/version.txt" ]; then
-                echo "$CURRENT_VER" > "$UPDATE_DIR/RetroRewind6/version.txt"
-            fi
-            
-            # Ensure MyStuff folder exists before copying
-            mkdir -p "$UPDATE_DIR/RetroRewind6/MyStuff"
-            cp -r .mystuff/* "$UPDATE_DIR/RetroRewind6/MyStuff/" || true
-            
-            # --- SMART PATCHING ---
-            # Replace files in Update Dir with modified files from Master Dir
-            # This ensures text changes apply to updates without re-running scripts on partial file sets
-            pushd "$UPDATE_DIR" > /dev/null
-            find . -type f | while read file; do
-                clean_file="${file#./}"
-                MASTER_FILE="../../dist_master/$clean_file"
-                if [ -f "$MASTER_FILE" ]; then
-                    cp "$MASTER_FILE" "$clean_file"
-                fi
-            done
-            popd > /dev/null
-            
-            # Zip Update
-            cd "$UPDATE_DIR"
-            zip -r -q "../UPDATE-Fordy-RR-${CURRENT_VER}.zip" .
-            cd ..
-            
-            # If this is the latest version, also create the PATCH_ONLY zip
-            if [ "$CURRENT_VER" == "$VERSION" ]; then
-                cp "UPDATE-Fordy-RR-${CURRENT_VER}.zip" "Fordy-RR-${VERSION}-PATCH_ONLY.zip"
-            fi
-            
-            # Cleanup
-            rm -rf "$UPDATE_DIR"
-          done
-          
-          echo "✅ Update Loop complete."
+          # Execute build script
+          ./builder/fordy-riivo.sh "${{ steps.check.outputs.version }}"
 
       - name: 🚀 Create Release
         if: steps.check.outputs.run_build == 'true'
@@ -174,11 +72,6 @@ jobs:
             🗿 **Auto-Generated Build**
             
             Based on upstream version: `${{ steps.check.outputs.version }}`
-            
-            **Includes:**
-            - `Fordy-RR-${{ steps.check.outputs.version }}.zip`: Complete Package
-            - `Fordy-RR-${{ steps.check.outputs.version }}-PATCH_ONLY.zip`: Only modified files (Text, XML, MyStuff) since last patch
-            - `UPDATE-Fordy-RR-*.zip`: All patches for this major version series
             
             **Modified 'GER' lang text (via MyStuff):**
             - 🏍️ Mach-Bike -> KFC-Mofa

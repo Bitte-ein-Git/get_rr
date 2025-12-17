@@ -24,8 +24,7 @@ echo "🚀 Starting build for version: $VERSION"
 rm -rf workdir
 mkdir -p workdir
 
-# Function to apply patches to a specific directory
-# Arguments: $1 = Path to RetroRewind6 folder
+# Function to apply text patches
 apply_patches() {
     local target_base="$1/Language/GER"
     
@@ -67,8 +66,9 @@ echo "📦 Processing MASTER Release (RetroRewind.zip)..."
 wget -q "$BASE_URL/RetroRewind.zip" -O workdir/RetroRewind.zip
 unzip -q workdir/RetroRewind.zip -d workdir/master
 
-# Update version.txt
-echo "$VERSION" > workdir/master/RetroRewind6/version.txt
+# Force update version.txt
+mkdir -p "workdir/master/RetroRewind6"
+echo "$VERSION" > "workdir/master/RetroRewind6/version.txt"
 
 # Apply Patches
 echo "   Applying text patches..."
@@ -117,10 +117,9 @@ for ((i=0; i<=MAX_PATCH; i++)); do
     mkdir -p workdir/temp_update
     unzip -q "workdir/update_src.zip" -d "workdir/temp_update"
     
-    # Update version.txt (Check if file exists first, hotfixes might differ)
-    if [ -f "workdir/temp_update/RetroRewind6/version.txt" ]; then
-        echo "$CURRENT_VER" > "workdir/temp_update/RetroRewind6/version.txt"
-    fi
+    # Force update version.txt (Create dir if missing)
+    mkdir -p "workdir/temp_update/RetroRewind6"
+    echo "$CURRENT_VER" > "workdir/temp_update/RetroRewind6/version.txt"
     
     # Apply Patches (Best Effort)
     echo "   Attempting to patch files..."

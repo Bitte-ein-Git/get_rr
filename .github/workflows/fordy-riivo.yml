@@ -23,7 +23,7 @@ jobs:
           REMOTE_VERSION=$(curl -s https://api.heyfordy.de/rr_app/version-rr | jq -r '.version')
           TAG_NAME="RR-riivo_${REMOTE_VERSION}"
           
-          echo "Detected API Version: $REMOTE_VERSION"
+          echo "Detected Retro Rewind Version: $REMOTE_VERSION"
           
           # Check if release already exists
           if gh release view "$TAG_NAME" > /dev/null 2>&1; then

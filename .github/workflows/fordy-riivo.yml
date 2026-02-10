@@ -25,9 +25,12 @@ jobs:
           REMOTE_CHANGELOG=$(echo "$API_DATA" | jq -r '.changelog')
           TAG_NAME="RR-riivo_${REMOTE_VERSION}"
           
+          # Mehrzeilige Outputs müssen mit einem Delimiter (EOF) gesetzt werden
           echo "version=$REMOTE_VERSION" >> $GITHUB_OUTPUT
-          echo "changelog=$REMOTE_CHANGELOG" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$REMOTE_CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           
           # Check if release already exists
           if ! gh release view "$TAG_NAME" > /dev/null 2>&1; then

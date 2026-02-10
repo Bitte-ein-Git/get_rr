@@ -1,8 +1,8 @@
-name: 🗿 Fordy-RR Riivolution Builder
+name: » 🗿• Fordy-RR Riivolution Builder
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -14,69 +14,90 @@ jobs:
         with:
           ref: Riivolution
 
-      - name: 🔍 Check Version & Tag
+      - name: 🔍 Check Version & Changelog
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch remote version from API
-          REMOTE_VERSION=$(curl -s https://api.heyfordy.de/rr_app/version-rr | jq -r '.version')
+          # Fetch remote data from API
+          API_DATA=$(curl -s https://api.heyfordy.de/rr_app/version-rr)
+          REMOTE_VERSION=$(echo "$API_DATA" | jq -r '.version')
+          REMOTE_CHANGELOG=$(echo "$API_DATA" | jq -r '.changelog')
           TAG_NAME="RR-riivo_${REMOTE_VERSION}"
           
-          echo "Detected Retro Rewind Version: $REMOTE_VERSION"
+          echo "version=$REMOTE_VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$REMOTE_CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           
           # Check if release already exists
-          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
-            echo "Release $TAG_NAME exists. Skipping."
-            echo "run_build=false" >> $GITHUB_OUTPUT
-          else
+          if ! gh release view "$TAG_NAME" > /dev/null 2>&1; then
             echo "New version detected. Starting build."
             echo "run_build=true" >> $GITHUB_OUTPUT
-            echo "version=$REMOTE_VERSION" >> $GITHUB_OUTPUT
-            echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          else
+            echo "Release exists. Checking for missing changelog..."
+            CURRENT_BODY=$(gh release view "$TAG_NAME" --json body -q .body)
+            
+            # Update if current body contains placeholder and API has real data
+            if [[ "$CURRENT_BODY" == *"No changelog released yet"* ]] && [[ "$REMOTE_CHANGELOG" != "No changelog released yet" ]]; then
+              echo "New changelog available. Updating release."
+              echo "update_changelog=true" >> $GITHUB_OUTPUT
+            else
+              echo "Everything up to date. Skipping."
+              echo "run_build=false" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: 🛠️ Setup Tools & Env
         if: steps.check.outputs.run_build == 'true'
         run: |
-          # Install dependencies
           sudo apt-get update -qq
           sudo apt-get install -y -qq wget unzip zip perl libarchive-tools
-          
-          # Make tools executable
           chmod +x wszst/wszst
           chmod +x wszst/wbmgt
           chmod +x builder/fordy-riivo.sh
-
-          # Add wszst directory to system PATH
           echo "${{ github.workspace }}/wszst" >> $GITHUB_PATH
 
       - name: 🏗️ Run Build Script
         if: steps.check.outputs.run_build == 'true'
-        id: build
         run: |
-          # Execute build script
           ./builder/fordy-riivo.sh "${{ steps.check.outputs.version }}"
 
-      - name: 🚀 Create Release
-        if: steps.check.outputs.run_build == 'true'
-        uses: softprops/action-gh-release@v1
+      - name: 🚀 Create or Update Release
+        if: steps.check.outputs.run_build == 'true' || steps.check.outputs.update_changelog == 'true'
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.check.outputs.tag_name }}
           name: 🗿 Fordy-RR • Riivolution (${{ steps.check.outputs.version }})
           files: |
             Fordy-RR-*.zip
             UPDATE-Fordy-RR-*.zip
+          fail_on_unmatched_files: false
           target_commitish: Riivolution
           body: |
-            🗿 **Auto-Generated Build**
+            🗿 **Auto-Generated Custom Build**
             
-            Based on upstream version: `${{ steps.check.outputs.version }}`
+            Based on Retro Rewind `v${{ steps.check.outputs.version }}`
             
-            **Modified 'GER' lang text (via MyStuff):**
+            **RR Changelog:**
+            ```
+            ${{ steps.check.outputs.changelog }}
+            ```
+            
+            **Custom changes:**
+            ```
+            Modified some .bmg files within the "Language"-folder 
+            to match my personal "MyStuff"-folder:
+            
             - 🏍️ Mach-Bike -> KFC-Mofa
             - 👤 Daisy -> Steve
+            ```
 
-            [⬇️ Download](https://api.heyfordy.de/dl?rr_riivo)
+            [⬇️ **Full** Download (First Install / Re-Install)](https://api.heyfordy.de/dl?rr_full)
+
+            [⬇️ Download **Update-only**](https://api.heyfordy.de/dl?rr_patch)
+
+            [⬇️ Download MyStuff](https://api.heyfordy.de/dl?rr_mystuff)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

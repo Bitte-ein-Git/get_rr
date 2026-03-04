@@ -20,7 +20,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Fetch remote data from API
-          API_DATA=$(curl -s https://api.heyfordy.de/rr_app/version-rr)
+          API_DATA=$(curl -s https://api.heyfordy.dev/rr_app/version-rr)
           REMOTE_VERSION=$(echo "$API_DATA" | jq -r '.version')
           REMOTE_CHANGELOG=$(echo "$API_DATA" | jq -r '.changelog')
           TAG_NAME="RR-riivo_${REMOTE_VERSION}"
@@ -94,10 +94,10 @@ jobs:
             - 👤 Daisy -> Steve
             ```
 
-            [⬇️ **Full** Download (First Install / Re-Install)](https://api.heyfordy.de/dl?rr_full)
+            [⬇️ **Full** Download (First Install / Re-Install)](https://api.heyfordy.dev/dl?rr_full)
 
-            [⬇️ Download **Update-only**](https://api.heyfordy.de/dl?rr_patch)
+            [⬇️ Download **Update-only**](https://api.heyfordy.dev/dl?rr_patch)
 
-            [⬇️ Download MyStuff](https://api.heyfordy.de/dl?rr_mystuff)
+            [⬇️ Download MyStuff](https://api.heyfordy.dev/dl?rr_mystuff)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

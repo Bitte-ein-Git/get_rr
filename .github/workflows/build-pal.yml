@@ -158,4 +158,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.prepare.outputs.tag }}
         run: |
-          gh release create "$TAG" --title "🏎️ RetroRewind ISO $TAG" --notes "[⬇️ Download latest build](https://api.heyfordy.de/dl?rr_iso)"
+          gh release create "$TAG" --title "🏎️ RetroRewind ISO $TAG" --notes "[⬇️ Download latest build](https://api.heyfordy.dev/dl?rr_iso)"

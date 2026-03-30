@@ -19,6 +19,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Fetch remote data from API
           API_DATA=$(curl -s https://api.heyfordy.dev/rr_app/version-rr)
           REMOTE_VERSION=$(echo "$API_DATA" | jq -r '.version')
           REMOTE_CHANGELOG=$(echo "$API_DATA" | jq -r '.changelog')
@@ -30,14 +31,20 @@ jobs:
           echo "$REMOTE_CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
+          # Check if release already exists
           if ! gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            echo "New version detected. Starting build."
             echo "run_build=true" >> $GITHUB_OUTPUT
           else
+            echo "Release exists. Checking for missing changelog..."
             CURRENT_BODY=$(gh release view "$TAG_NAME" --json body -q .body)
             
+            # Update if current body contains placeholder and API has real data
             if [[ "$CURRENT_BODY" == *"No changelog released yet"* ]] && [[ "$REMOTE_CHANGELOG" != "No changelog released yet" ]]; then
+              echo "New changelog available. Updating release."
               echo "update_changelog=true" >> $GITHUB_OUTPUT
             else
+              echo "Everything up to date. Skipping."
               echo "run_build=false" >> $GITHUB_OUTPUT
             fi
           fi
@@ -66,7 +73,7 @@ jobs:
           files: |
             Fordy-RR-*.zip
             UPDATE-Fordy-RR-*.zip
-            LANG_ONLY-Fordy-RR-*.zip
+            LANG_PATCH-Fordy-RR-*.zip
           fail_on_unmatched_files: false
           target_commitish: Riivolution
           body: |
@@ -82,17 +89,16 @@ jobs:
             **Custom changes:**
             ```
             Modified some .bmg files within the "Language"-folder 
-            to match my personal "MyStuff" custom characters:
+            to match my personal "MyStuff"-folder:
             
             - 🏍️ Mach-Bike -> KFC-Mofa
-            - 👤 Daisy (Schwarz/Türkis) / ds-1 -> Steve
-
+            - 👤 Daisy -> Steve
             ```
 
             [⬇️ **Full** Download (First Install / Re-Install)](https://api.heyfordy.dev/dl?rr_full)
 
             [⬇️ Download **Update-only**](https://api.heyfordy.dev/dl?rr_patch)
-            
+
             [⬇️ Download MyStuff](https://api.heyfordy.dev/dl?rr_mystuff)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

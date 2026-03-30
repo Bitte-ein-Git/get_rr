@@ -1,0 +1,109 @@
+name: » 🗺️ • Extract RR Tracks to JSON
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Riivolution Branch
+        uses: actions/checkout@v4
+        with:
+          ref: Riivolution
+
+      - name: Setup local Wiimms SZS Tools
+        run: |
+          # Make local tools executable and add to path
+          chmod +x wszst/*
+          echo "$(pwd)/wszst" >> $GITHUB_PATH
+
+      - name: Download Fordy-RR release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Download latest zip and extract
+          gh release download --pattern "Fordy-RR-*.zip"
+          unzip Fordy-RR-*.zip -d rr_mod
+
+      - name: Extract SZS and Decode BMG
+        run: |
+          # Extract all szs and decode all bmg recursively
+          find rr_mod -type f -name "*.szs" -exec wszst extract {} -d {}_ext \;
+          find rr_mod -type f -name "*.bmg" -exec wbmgt decode {} \;
+
+      - name: Generate Python Parser
+        run: |
+          # Write python script to parse decoded bmg files
+          cat << 'EOF' > parse_bmg.py
+          import os, json, re, glob
+
+          bmg_files = glob.glob('rr_mod/**/*.txt', recursive=True)
+          id_regex = re.compile(r'^\[(?:0x)?([0-9a-fA-F]+)\]')
+
+          lang_map = {
+              'E': 'en', 'G': 'de', 'F': 'fr', 'S': 'es', 'I': 'it',
+              'J': 'ja', 'K': 'ko', 'N': 'nl', 'M': 'nl'
+          }
+
+          def get_lang(filepath):
+              name = os.path.basename(filepath)
+              match = re.search(r'_([EGFSIJKNM])\.', name, re.IGNORECASE)
+              if match:
+                  return lang_map.get(match.group(1).upper(), 'en')
+              
+              lower_path = filepath.lower()
+              if 'german' in lower_path or '/de/' in lower_path: return 'de'
+              if 'french' in lower_path or '/fr/' in lower_path: return 'fr'
+              if 'spanish' in lower_path or '/es/' in lower_path: return 'es'
+              if 'italian' in lower_path or '/it/' in lower_path: return 'it'
+              if 'dutch' in lower_path or '/nl/' in lower_path: return 'nl'
+              return 'en'
+
+          db = {}
+
+          for f in bmg_files:
+              lang = get_lang(f)
+              try:
+                  with open(f, 'r', encoding='utf-8') as txt:
+                      lines = txt.readlines()
+              except:
+                  continue
+
+              current_id = None
+              current_text = []
+
+              for line in lines:
+                  if line.startswith('#'): continue
+                  match = id_regex.match(line.strip())
+                  if match:
+                      if current_id and current_text:
+                          msg = ''.join(current_text).strip()
+                          if current_id not in db: db[current_id] = {'en': '', 'translations': {}}
+                          if lang == 'en': db[current_id]['en'] = msg
+                          else: db[current_id]['translations'][lang] = msg
+                      current_id = match.group(1).upper()
+                      current_text = []
+                  elif current_id:
+                      if line.strip() != '' or current_text:
+                          current_text.append(line)
+
+              if current_id and current_text:
+                  msg = ''.join(current_text).strip()
+                  if current_id not in db: db[current_id] = {'en': '', 'translations': {}}
+                  if lang == 'en': db[current_id]['en'] = msg
+                  else: db[current_id]['translations'][lang] = msg
+
+          # Write parsed data to JSON
+          with open('RR-Tracks.json', 'w', encoding='utf-8') as out:
+              json.dump(db, out, indent=2, ensure_ascii=False)
+          EOF
+
+      - name: Parse BMGs and build JSON
+        run: python3 parse_bmg.py
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RR-Tracks
+          path: RR-Tracks.json

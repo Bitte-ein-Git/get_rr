@@ -50,6 +50,8 @@ apply_patches() {
             
             # Replace character and vehicle names using perl regex
             perl -pi -e 's/(?<!Baby )Daisy \(Schwarz\/Türkis\)/\\c{yor3}Steve/g' "$WORK_DIR/temp_msg.txt"
+            perl -pi -e 's/(?<!Baby )Daisy \(Black\/Teal\)/\\c{yor3}Steve/g' "$WORK_DIR/temp_msg.txt"
+            perl -pi -e 's/\bTheBeefBai\b/heyFordy/g' "$WORK_DIR/temp_msg.txt"
             perl -pi -e 's/Mach-Bike/\\c{yor4}KFC\\c{off}-\\c{yor2}Mofa/g' "$WORK_DIR/temp_msg.txt"
             
             # Convert text back to bmg format

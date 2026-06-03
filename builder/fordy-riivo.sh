@@ -28,9 +28,10 @@ apply_patches() {
     local lang_dir="$target_base/Language"
     local bin_dir="$target_base/Binaries"
     
-    if [ -f "$bin_dir/Code.pul" ]; then
-        perl -pi -e 's/TheBeefBai/ heyFordy /g' "$bin_dir/Code.pul"
-    fi
+    # Commented out because modifying Code.pul will flag you for unauthorized modifications in online multiplayer.
+    # if [ -f "$bin_dir/Code.pul" ]; then
+    #     perl -pi -e 's/TheBeefBai/ heyFordy /g' "$bin_dir/Code.pul"
+    # fi
     
     if [ ! -d "$lang_dir" ]; then
         echo "   ⚠️ No Language folder found. Skipping patches."

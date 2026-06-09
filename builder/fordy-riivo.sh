@@ -8,11 +8,13 @@ BASE_URL="http://update.rwfc.net:8000/RetroRewind/zip"
 ROOT_DIR=$(pwd)
 WORK_DIR="$ROOT_DIR/workdir"
 
+# Input validation
 if [ -z "$VERSION" ]; then
   echo "Error: No version provided."
   exit 1
 fi
 
+# Dependency check
 if ! command -v wszst &> /dev/null || ! command -v wbmgt &> /dev/null; then
     echo "Error: wszst or wbmgt not found in PATH"
     exit 1
@@ -23,15 +25,11 @@ echo "🚀 Starting build for version: $VERSION"
 rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 
+# Patch function
 apply_patches() {
     local target_base="$1"
     local lang_dir="$target_base/Language"
     local bin_dir="$target_base/Binaries"
-    
-    # Commented out because modifying Code.pul will flag you for unauthorized modifications in online multiplayer.
-    # if [ -f "$bin_dir/Code.pul" ]; then
-    #     perl -pi -e 's/TheBeefBai/ heyFordy /g' "$bin_dir/Code.pul"
-    # fi
     
     if [ ! -d "$lang_dir" ]; then
         echo "   ⚠️ No Language folder found. Skipping patches."
@@ -44,8 +42,9 @@ apply_patches() {
         find "$WORK_DIR/temp_szs" -name "*.bmg" | while read -r bmg_file; do
             wbmgt decode "$bmg_file" --dest "$WORK_DIR/temp_msg.txt" --quiet --overwrite
             
-            perl -pi -e 's/Daisy \(Schwarz\/Türkis\)/\\c{yor3}Steve/g' "$WORK_DIR/temp_msg.txt"
-            perl -pi -e 's/Mach-Bike/\\c{yor4}KFC\\c{off}-\\c{yor2}Mofa/g' "$WORK_DIR/temp_msg.txt"
+            perl -pi -e 's/Daisy \(Schwarz\/Türkis\)/\\u{f0a2,f0a3,f0a4,f0a5,f0a4} (\\u{f0a0} Minecraft)/g' "$WORK_DIR/temp_msg.txt"
+            perl -pi -e 's/Mach-Bike/\\u{f0aa} \\c{yor4}KFC\\c{off}-\\c{yor2}Mofa/g' "$WORK_DIR/temp_msg.txt"
+            perl -pi -e 's/TheBeefBai/\\u{f0a1} heyFordy/g' "$WORK_DIR/temp_msg.txt"
             
             wbmgt encode "$WORK_DIR/temp_msg.txt" --dest "$bmg_file" --quiet --overwrite
             rm "$WORK_DIR/temp_msg.txt"
@@ -69,9 +68,6 @@ apply_patches "$WORK_DIR/master/RetroRewind6"
 cd "$WORK_DIR/master"
 zip -r -q "$ROOT_DIR/Fordy-RR-${VERSION}.zip" .
 
-if [ -f "RetroRewind6/Binaries/Code.pul" ]; then
-    zip -q "$ROOT_DIR/LANG_ONLY-Fordy-RR-${VERSION}.zip" RetroRewind6/Binaries/Code.pul
-fi
 if [ -d "RetroRewind6/Language" ]; then
     find RetroRewind6/Language -name "*.szs" -exec zip -q "$ROOT_DIR/LANG_ONLY-Fordy-RR-${VERSION}.zip" {} +
 fi

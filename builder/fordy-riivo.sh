@@ -3,7 +3,7 @@
 set -e
 
 VERSION="$1"
-BASE_URL="http://update.rwfc.net:8000/RetroRewind/zip"
+BASE_URL="https://update.rwfc.net/RetroRewind/zip"
 
 ROOT_DIR=$(pwd)
 WORK_DIR="$ROOT_DIR/workdir"
